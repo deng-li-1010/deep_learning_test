@@ -1,0 +1,210 @@
+# Softmax+交叉熵求导 精讲（下标+含义+实例+分步推导）
+## 前置统一约定（先吃透下标，全程不变）
+设：总类别数 $C=3$（3分类，方便举例）
+
+### 1. 下标角色（区分规则，全程沿用）
+- $k$：**固定下标**，代表**真实类别**。本例规定：样本真实标签是第2类，即 $\boldsymbol{k=2}$，全程不变。
+- $m$：搭配 $p$，$p_m$ = 第 $m$ 类的预测概率（$m=1,2,3$）。
+- $n$：搭配 $z$，$z_n$ = 模型第 $n$ 类原始输出得分（logits，$n=1,2,3$）。
+- $t$：搭配 $w$，$w_t$ = 第 $t$ 类的权重（$t=1,2,3$）。
+
+### 2. 核心公式
+- Softmax：$\displaystyle p_m = \frac{e^{z_m}}{\sum_{n=1}^3 e^{z_n}}$，满足 $p_1+p_2+p_3=1$
+- One-hot标签：真实类 $y_2=1$，其余 $y_1=y_3=0$
+- 单样本交叉熵损失：$\displaystyle L=-\sum_{m=1}^3 y_m\log p_m$
+
+### 3. 基础导数公式
+$(\log x)'=\dfrac{1}{x},\ \ (e^x)'=e^x$；函数不含求导变量时，偏导数为 $0$。
+
+---
+
+## 第一步：化简损失函数 + 求 $\boldsymbol{\dfrac{\partial L}{\partial p_m}}$（损失对预测概率求导）
+### 1. 化简损失
+代入 $y_1=0,y_2=1,y_3=0$：
+$$
+L = -y_1\log p_1 -y_2\log p_2 -y_3\log p_3 = -\log p_2
+$$
+**含义**：损失只由真实类概率 $p_2$ 决定，和 $p_1、p_3$ 无直接关系。
+
+### 2. 分情况求导（$m$ 遍历所有类别）
+#### 情况1：$m=k=2$（对真实类概率 $p_2$ 求导）
+$$
+\frac{\partial L}{\partial p_2} = \frac{\partial}{\partial p_2}\big(-\log p_2\big) = -\frac{1}{p_2}
+$$
+**含义**：改变真实类的预测概率，会直接改变损失，导数不为0。
+
+#### 情况2：$m\neq k$，即 $m=1、3$（对非真实类概率 $p_1、p_3$ 求导）
+损失式 $L=-\log p_2$ 中**没有 $p_1、p_3$**，因此：
+$$
+\frac{\partial L}{\partial p_1}=0,\quad \frac{\partial L}{\partial p_3}=0
+$$
+**含义**：单纯改变非真实类概率（不影响 $p_2$），损失不变。
+
+### 本步总结
+$$
+\frac{\partial L}{\partial p_m}=
+\begin{cases}
+-\dfrac{1}{p_k} & m=k \ (\text{真实类概率}) \\[4pt]
+0 & m\neq k \ (\text{非真实类概率})
+\end{cases}
+$$
+
+> ⚠️ 关键提醒（解答核心疑问）：
+> 后续链式求导时，我们**永远对 $p_k$（真实类概率）求导**，因此第一项固定取 $\boldsymbol{-\dfrac{1}{p_k}}$，不会取 0。
+
+---
+
+## 第二步：求 $\boldsymbol{\dfrac{\partial p_m}{\partial z_n}}$（预测概率对原始得分求导）
+研究关系：第 $m$ 类概率 $p_m$ ↔ 第 $n$ 类得分 $z_n$，分**同类别、跨类别**两种情况。
+
+### 预备计算
+记分母 $S=\sum_{n=1}^3 e^{z_n}$，则 $\dfrac{\partial S}{\partial z_n}=e^{z_n}$。
+
+### 情况1：$m=n$（同一类别，例：$p_2$ 对 $z_2$ 求导）
+以 $\dfrac{\partial p_2}{\partial z_2}$ 为例：
+$$
+p_2=\frac{e^{z_2}}{S}
+$$
+套用分式求导法则：
+$$
+\frac{\partial p_2}{\partial z_2}
+=\frac{e^{z_2}\cdot S - e^{z_2}\cdot e^{z_2}}{S^2}
+=\frac{e^{z_2}}{S}-\left(\frac{e^{z_2}}{S}\right)^2
+=p_2(1-p_2)
+$$
+
+通用公式：$\boldsymbol{\dfrac{\partial p_m}{\partial z_m}=p_m(1-p_m)}$
+**含义**：自身类别得分越高，自身预测概率越大。
+
+### 情况2：$m\neq n$（不同类别，例：$p_2$ 对 $z_1$ 求导）
+以 $\dfrac{\partial p_2}{\partial z_1}$ 为例：
+$p_2=\dfrac{e^{z_2}}{S}$，分子 $e^{z_2}$ 不含 $z_1$，导数为0：
+$$
+\frac{\partial p_2}{\partial z_1}
+=\frac{0\cdot S - e^{z_2}\cdot e^{z_1}}{S^2}
+=-\frac{e^{z_2}}{S}\cdot\frac{e^{z_1}}{S}
+=-p_2 p_1
+$$
+
+通用公式：$\boldsymbol{\dfrac{\partial p_m}{\partial z_n}=-p_m p_n \ \ (m\neq n)}$
+**含义**：其他类别得分越高，当前类别概率越低（概率总和为1，相互挤压）。
+
+### 本步总结
+$$
+\frac{\partial p_m}{\partial z_n}=
+\begin{cases}
+p_m(1-p_m) & m=n \ (\text{同一类别}) \\[4pt]
+-p_m p_n & m\neq n \ (\text{不同类别})
+\end{cases}
+$$
+
+---
+
+## 第三步：求 $\boldsymbol{\dfrac{\partial z_n}{\partial w_t}}$（原始得分对权重求导）
+得分公式：$z_n = w_n \cdot x + b_n$（$x$ 为输入特征，$b_n$ 为偏置）
+研究关系：第 $n$ 类得分 $z_n$ ↔ 第 $t$ 类权重 $w_t$。
+
+### 情况1：$t=n$（同一类别，例：$z_1$ 对 $w_1$ 求导）
+$$
+\frac{\partial z_1}{\partial w_1} = x
+$$
+通用公式：$\boldsymbol{\dfrac{\partial z_n}{\partial w_n}=x}$
+**含义**：只有当前类别的权重，能影响当前类别的得分。
+
+### 情况2：$t\neq n$（不同类别，例：$z_1$ 对 $w_2$ 求导）
+$z_1=w_1 x + b_1$ 中不含 $w_2$，因此：
+$$
+\frac{\partial z_1}{\partial w_2}=0
+$$
+通用公式：$\boldsymbol{\dfrac{\partial z_n}{\partial w_t}=0 \ \ (t\neq n)}$
+**含义**：其他类别的权重，不会影响当前类别的得分。
+
+### 本步总结
+$$
+\frac{\partial z_n}{\partial w_t}=
+\begin{cases}
+x & t=n \ (\text{同一类别}) \\[4pt]
+0 & t\neq n \ (\text{不同类别})
+\end{cases}
+$$
+
+---
+
+## 第四步：链式法则求最终梯度 $\boldsymbol{\dfrac{\partial L}{\partial w_t}}$（损失对权重求导）
+### 核心链式逻辑
+权重 $w_t$ → 得分 $z_t$ → 概率 $p_k$（真实类概率）→ 损失 $L$
+完整链式：
+$$
+\frac{\partial L}{\partial w_t}
+= \frac{\partial L}{\partial p_k} \cdot \frac{\partial p_k}{\partial z_t} \cdot \frac{\partial z_t}{\partial w_t}
+$$
+再次强调：链条第一项一定是 $\dfrac{\partial L}{\partial p_k}$（真实类概率），取值 $\boldsymbol{-\dfrac{1}{p_k}}$，永远不为0。
+
+结合例子：$k=2$（真实类为第2类），分两大类计算。
+
+### 场景1：求**真实类别权重**梯度 $\boldsymbol{t=k=2}$（计算 $\dfrac{\partial L}{\partial w_2}$）
+逐项代入公式：
+1. $\dfrac{\partial L}{\partial p_2} = -\dfrac{1}{p_2}$（第一步结论）
+2. $\dfrac{\partial p_2}{\partial z_2} = p_2(1-p_2)$（第二步，同类别）
+3. $\dfrac{\partial z_2}{\partial w_2} = x$（第三步，同类别）
+
+计算：
+$$
+\begin{align}
+\frac{\partial L}{\partial w_2}
+&= -\frac{1}{p_2} \cdot p_2(1-p_2) \cdot x \\
+&= -(1-p_2) \cdot x \\
+&= \boldsymbol{(p_2 - 1)x}
+\end{align}
+$$
+**含义**：真实类权重的梯度由真实类概率决定，用于迭代更新权重。
+
+### 场景2：求**非真实类别权重**梯度 $\boldsymbol{t\neq k}$（以 $t=1$，计算 $\dfrac{\partial L}{\partial w_1}$ 为例）
+逐项代入公式：
+1. $\dfrac{\partial L}{\partial p_2} = -\dfrac{1}{p_2}$（依旧是真实类概率导数，**不是0**）
+2. $\dfrac{\partial p_2}{\partial z_1} = -p_2 p_1$（第二步，跨类别）
+3. $\dfrac{\partial z_1}{\partial w_1} = x$（第三步，同类别）
+
+计算：
+$$
+\begin{align}
+\frac{\partial L}{\partial w_1}
+&= -\frac{1}{p_2} \cdot (-p_2 p_1) \cdot x \\
+&= \boldsymbol{p_1 \cdot x}
+\end{align}
+$$
+
+同理可算 $t=3$：$\boldsymbol{\dfrac{\partial L}{\partial w_3}=p_3 \cdot x}$
+
+### 本步总结
+$$
+\frac{\partial L}{\partial w_t}=
+\begin{cases}
+(p_k - 1)x & t=k \ (\text{真实类别权重}) \\[4pt]
+p_t \cdot x & t\neq k \ (\text{非真实类别权重})
+\end{cases}
+$$
+
+---
+
+## 全局答疑 + 最终梳理
+### 1. 核心疑问解答
+问：场景2是非真实类权重，为什么 $\dfrac{\partial L}{\partial p}$ 不取0？
+答：
+- $\dfrac{\partial L}{\partial p_m}=0$，仅当**对非真实类概率 $p_t$ 求导**时成立；
+- 链式推导中，我们求的是 $\boldsymbol{\dfrac{\partial L}{\partial p_k}}$（真实类概率），损失完全由 $p_k$ 决定，所以该项固定为 $-\dfrac{1}{p_k}$。
+
+### 2. 下标速记表
+| 符号 | 下标 | 含义 |
+| ---- | ---- | ---- |
+| $p$ | $m$ | 任意类别的预测概率 |
+| $z$ | $n$ | 任意类别的原始得分 |
+| $w$ | $t$ | 任意类别的权重 |
+| 固定 | $k$ | 样本真实类别（全程不变） |
+
+### 3. 完整推导流程串讲
+1. 利用one-hot标签简化损失：$L=-\log p_k$；
+2. 求损失对**真实类概率**导数：$-\dfrac{1}{p_k}$；
+3. 求真实类概率对各类得分导数：同类别取 $p(1-p)$，跨类别取 $-p_k p_t$；
+4. 求得分对自身权重导数：结果为输入 $x$；
+5. 链式相乘、化简，得到权重最终梯度。
